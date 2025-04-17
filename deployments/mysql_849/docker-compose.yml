@@ -1,0 +1,19 @@
+services:
+  mysql_849:
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    container_name: mysql_849
+    environment:
+      MYSQL_DATABASE: user
+      MYSQL_PASSWORD: yong7623822
+      MYSQL_ROOT_PASSWORD: yong7623822
+      MYSQL_USER: yopai
+    image: mysql:8.0
+    platform: linux/arm64/v8
+    ports:
+    - 3309:3306
+    restart: always
+    volumes:
+    - mysql_849_data:/var/lib/mysql
+volumes:
+  mysql_849_data:
+    driver: local

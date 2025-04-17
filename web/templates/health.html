@@ -1,0 +1,917 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #6e8efb, #a777e3);
+        --secondary-gradient: linear-gradient(135deg, #42e695, #3bb2b8);
+        --danger-gradient: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+        --warning-gradient: linear-gradient(135deg, #ffb347, #ffcc33);
+        --dark-gradient: linear-gradient(135deg, #2b5876, #4e4376);
+        --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.1), 0 6px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .page-title {
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .health-card {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: var(--card-shadow);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        margin-bottom: 20px;
+    }
+    
+    .health-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .health-card .card-header {
+        background: var(--dark-gradient);
+        color: white;
+        border: none;
+        padding: 1rem 1.5rem;
+    }
+    
+    .system-metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .metric-card {
+        flex: 1;
+        min-width: 200px;
+        background: #fff;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: var(--card-shadow);
+    }
+    
+    .metric-title {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 0.75rem;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-icon {
+        font-size: 2.5rem;
+        margin-right: 1rem;
+        opacity: 0.2;
+        position: absolute;
+        right: 1rem;
+        top: 1rem;
+    }
+    
+    .progress {
+        height: 8px;
+        border-radius: 4px;
+        background-color: #f5f5f5;
+        margin-bottom: 0.5rem;
+    }
+    
+    .progress-bar {
+        border-radius: 4px;
+    }
+    
+    .progress-low {
+        background: var(--secondary-gradient);
+    }
+    
+    .progress-medium {
+        background: var(--warning-gradient);
+    }
+    
+    .progress-high {
+        background: var(--danger-gradient);
+    }
+    
+    .container-list {
+        margin-top: 1.5rem;
+    }
+    
+    .container-item {
+        background: #fff;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+    }
+    
+    .container-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.12);
+    }
+    
+    .container-header {
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .container-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .container-status {
+        padding: 0.35rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .status-running {
+        background: rgba(66, 230, 149, 0.1);
+        color: #42e695;
+    }
+    
+    .status-stopped {
+        background: rgba(255, 107, 107, 0.1);
+        color: #ff6b6b;
+    }
+    
+    .status-unhealthy {
+        background: rgba(255, 179, 71, 0.1);
+        color: #ffb347;
+    }
+    
+    .container-metrics {
+        display: flex;
+        padding: 1rem 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .container-metric {
+        flex: 1;
+        min-width: 130px;
+        margin-right: 1rem;
+    }
+    
+    .container-metric-title {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+    
+    .container-metric-value {
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+    
+    .refresh-btn {
+        margin-left: 1rem;
+        border-radius: 30px;
+        padding: 0.5rem 1.25rem;
+        background: var(--primary-gradient);
+        border: none;
+        box-shadow: 0 4px 6px rgba(110, 142, 251, 0.3);
+        transition: all 0.3s;
+    }
+    
+    .refresh-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(110, 142, 251, 0.4);
+    }
+    
+    .detail-panel {
+        padding: 0;
+        height: 0;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .detail-panel.active {
+        padding: 1.5rem;
+        height: auto;
+    }
+    
+    .loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100px;
+    }
+    
+    .loading-animation {
+        display: inline-block;
+        position: relative;
+        width: 64px;
+        height: 64px;
+    }
+    
+    .loading-animation div {
+        position: absolute;
+        top: 27px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        animation-timing-function: cubic-bezier(0, 1, 1, 0);
+    }
+    
+    .loading-animation div:nth-child(1) {
+        left: 6px;
+        animation: loading1 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(2) {
+        left: 6px;
+        animation: loading2 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(3) {
+        left: 26px;
+        animation: loading2 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(4) {
+        left: 45px;
+        animation: loading3 0.6s infinite;
+    }
+    
+    @keyframes loading1 {
+        0% { transform: scale(0); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes loading2 {
+        0% { transform: translate(0, 0); }
+        100% { transform: translate(19px, 0); }
+    }
+    
+    @keyframes loading3 {
+        0% { transform: scale(1); }
+        100% { transform: scale(0); }
+    }
+    
+    .metric-chart {
+        height: 250px;
+        margin: 1rem 0;
+    }
+    
+    .no-containers {
+        text-align: center;
+        padding: 3rem;
+        color: #6c757d;
+    }
+    
+    .no-containers i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title">容器健康监控</h1>
+    <div>
+        <span id="last-update">上次更新: -</span>
+        <button id="refresh-btn" class="btn refresh-btn">
+            <i class="fa fa-refresh"></i> 刷新
+        </button>
+        <div class="form-check form-check-inline ms-3">
+            <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+            <label class="form-check-label" for="auto-refresh">自动刷新</label>
+        </div>
+    </div>
+</div>
+
+<!-- 系统指标卡片 -->
+<div class="card health-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fa fa-server me-2"></i>系统资源监控</h5>
+    </div>
+    <div class="card-body">
+        <div class="system-metrics" id="system-metrics">
+            <div class="loading" id="system-loading">
+                <div class="loading-animation">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 容器列表 -->
+<div class="card health-card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fa fa-cubes me-2"></i>容器健康状态</h5>
+    </div>
+    <div class="card-body">
+        <div id="containers-list">
+            <div class="loading" id="containers-loading">
+                <div class="loading-animation">
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 容器详情模态框 -->
+<div class="modal fade" id="containerDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detail-container-name">容器详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="loading" id="detail-loading">
+                    <div class="loading-animation">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                </div>
+                <div id="container-details" style="display: none;">
+                    <!-- 容器详情内容将通过JS动态生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+    $(document).ready(function() {
+        let autoRefreshInterval;
+        const refreshInterval = {{ config.check_interval }} * 1000 || 30000; // 从配置获取刷新间隔，默认30秒
+        let containerCharts = {}; // 存储容器图表实例
+        
+        // 初始加载数据
+        loadData();
+        
+        // 设置自动刷新
+        if ($('#auto-refresh').is(':checked')) {
+            startAutoRefresh();
+        }
+        
+        // 自动刷新切换
+        $('#auto-refresh').change(function() {
+            if ($(this).is(':checked')) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+        
+        // 手动刷新按钮
+        $('#refresh-btn').click(function() {
+            loadData();
+        });
+        
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(loadData, refreshInterval);
+        }
+        
+        function stopAutoRefresh() {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        // 加载所有监控数据
+        function loadData() {
+            loadSystemMetrics();
+            loadContainersData();
+            updateLastRefresh();
+        }
+        
+        // 更新最后刷新时间
+        function updateLastRefresh() {
+            $('#last-update').text('上次更新: ' + new Date().toLocaleString());
+        }
+        
+        // 加载系统监控指标
+        function loadSystemMetrics() {
+            $('#system-loading').show();
+            
+            $.ajax({
+                url: '/api/health/metrics',
+                method: 'GET',
+                success: function(response) {
+                    $('#system-loading').hide();
+                    
+                    if (response.success) {
+                        renderSystemMetrics(response.metrics);
+                    } else {
+                        $('#system-metrics').html('<div class="alert alert-danger">获取系统指标失败: ' + response.error + '</div>');
+                    }
+                },
+                error: function(xhr) {
+                    $('#system-loading').hide();
+                    $('#system-metrics').html('<div class="alert alert-danger">请求失败: ' + (xhr.responseJSON?.error || '服务器错误') + '</div>');
+                }
+            });
+        }
+        
+        // 渲染系统监控指标
+        function renderSystemMetrics(metrics) {
+            const host = metrics.host;
+            const containers = metrics.containers;
+            
+            // 格式化数据大小为可读格式
+            function formatBytes(bytes) {
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let size = bytes;
+                let unitIndex = 0;
+                
+                while (size >= 1024 && unitIndex < units.length - 1) {
+                    size /= 1024;
+                    unitIndex++;
+                }
+                
+                return size.toFixed(2) + ' ' + units[unitIndex];
+            }
+            
+            // 获取进度条类名
+            function getProgressClass(percent) {
+                if (percent < 50) return 'progress-low';
+                if (percent < 80) return 'progress-medium';
+                return 'progress-high';
+            }
+            
+            let html = `
+                <div class="metric-card">
+                    <i class="fa fa-microchip metric-icon"></i>
+                    <div class="metric-title">CPU使用率</div>
+                    <div class="metric-value">${host.cpu.percent.toFixed(1)}%</div>
+                    <div class="progress">
+                        <div class="progress-bar ${getProgressClass(host.cpu.percent)}" style="width: ${host.cpu.percent}%"></div>
+                    </div>
+                    <div class="metric-subtitle">共 ${host.cpu.count} 核心</div>
+                </div>
+                
+                <div class="metric-card">
+                    <i class="fa fa-memory metric-icon"></i>
+                    <div class="metric-title">内存使用率</div>
+                    <div class="metric-value">${host.memory.percent.toFixed(1)}%</div>
+                    <div class="progress">
+                        <div class="progress-bar ${getProgressClass(host.memory.percent)}" style="width: ${host.memory.percent}%"></div>
+                    </div>
+                    <div class="metric-subtitle">${formatBytes(host.memory.used)} / ${formatBytes(host.memory.total)}</div>
+                </div>
+                
+                <div class="metric-card">
+                    <i class="fa fa-hdd-o metric-icon"></i>
+                    <div class="metric-title">磁盘使用率</div>
+                    <div class="metric-value">${host.disk.percent.toFixed(1)}%</div>
+                    <div class="progress">
+                        <div class="progress-bar ${getProgressClass(host.disk.percent)}" style="width: ${host.disk.percent}%"></div>
+                    </div>
+                    <div class="metric-subtitle">${formatBytes(host.disk.used)} / ${formatBytes(host.disk.total)}</div>
+                </div>
+                
+                <div class="metric-card">
+                    <i class="fa fa-cubes metric-icon"></i>
+                    <div class="metric-title">容器数量</div>
+                    <div class="metric-value">${containers.total}</div>
+                    <div class="metric-subtitle">运行中: ${containers.running} | 已停止: ${containers.stopped}</div>
+                </div>
+            `;
+            
+            $('#system-metrics').html(html);
+        }
+        
+        // 加载容器列表数据
+        function loadContainersData() {
+            $('#containers-loading').show();
+            
+            $.ajax({
+                url: '/api/containers',
+                method: 'GET',
+                success: function(data) {
+                    $('#containers-loading').hide();
+                    
+                    if (data.containers && data.containers.length > 0) {
+                        renderContainersList(data.containers);
+                    } else {
+                        $('#containers-list').html(`
+                            <div class="no-containers">
+                                <i class="fa fa-docker"></i>
+                                <h4>没有发现容器</h4>
+                                <p>当前系统中没有运行的Docker容器</p>
+                            </div>
+                        `);
+                    }
+                },
+                error: function(xhr) {
+                    $('#containers-loading').hide();
+                    $('#containers-list').html('<div class="alert alert-danger">获取容器数据失败: ' + (xhr.responseJSON?.error || '服务器错误') + '</div>');
+                }
+            });
+        }
+        
+        // 渲染容器列表
+        function renderContainersList(containers) {
+            let html = '';
+            
+            containers.forEach(container => {
+                // 状态样式
+                let statusClass = 'status-stopped';
+                if (container.status === 'running') {
+                    statusClass = 'status-running';
+                    
+                    if (container.health === 'unhealthy') {
+                        statusClass = 'status-unhealthy';
+                    }
+                }
+                
+                // CPU和内存使用
+                let cpuUsage = '- %';
+                let memUsage = '- / - MB';
+                let memPercent = 0;
+                
+                if (container.status === 'running' && container.stats) {
+                    if (container.stats.cpu_percent !== undefined) {
+                        cpuUsage = container.stats.cpu_percent.toFixed(1) + ' %';
+                    }
+                    
+                    if (container.stats.memory_usage !== undefined) {
+                        const memoryUsageMB = (container.stats.memory_usage / (1024 * 1024)).toFixed(1);
+                        const memoryLimitMB = (container.stats.memory_limit / (1024 * 1024)).toFixed(1);
+                        memUsage = `${memoryUsageMB} / ${memoryLimitMB} MB`;
+                        memPercent = container.stats.memory_percent || 0;
+                    }
+                }
+                
+                html += `
+                <div class="container-item" data-container-id="${container.id}">
+                    <div class="container-header">
+                        <div class="container-name">
+                            ${container.name}
+                            <small class="text-muted">${container.id}</small>
+                        </div>
+                        <div class="container-status ${statusClass}">
+                            ${container.status} ${container.health !== 'no_healthcheck' ? '(' + container.health + ')' : ''}
+                        </div>
+                    </div>
+                    <div class="container-metrics">
+                        <div class="container-metric">
+                            <div class="container-metric-title">CPU使用率</div>
+                            <div class="container-metric-value">${cpuUsage}</div>
+                        </div>
+                        <div class="container-metric">
+                            <div class="container-metric-title">内存使用率</div>
+                            <div class="container-metric-value">${memPercent.toFixed(1)}%</div>
+                            <div class="progress">
+                                <div class="progress-bar ${getProgressClass(memPercent)}" style="width: ${memPercent}%"></div>
+                            </div>
+                            <div class="small">${memUsage}</div>
+                        </div>
+                        <div class="container-metric">
+                            <div class="container-metric-title">重启次数</div>
+                            <div class="container-metric-value">${container.restart_history ? container.restart_history.restart_count : 0}</div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            $('#containers-list').html(html);
+            
+            // 绑定容器详情点击事件
+            $('.container-item').click(function() {
+                const containerId = $(this).data('container-id');
+                showContainerDetails(containerId);
+            });
+        }
+        
+        // 获取进度条类名
+        function getProgressClass(percent) {
+            if (percent < 50) return 'progress-low';
+            if (percent < 80) return 'progress-medium';
+            return 'progress-high';
+        }
+        
+        // 显示容器详情
+        function showContainerDetails(containerId) {
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('containerDetailModal'));
+            modal.show();
+            
+            // 显示加载中
+            $('#detail-loading').show();
+            $('#container-details').hide();
+            
+            // 获取容器详情
+            $.ajax({
+                url: `/api/container/${containerId}/stats`,
+                method: 'GET',
+                success: function(response) {
+                    $('#detail-loading').hide();
+                    
+                    if (response.success) {
+                        renderContainerDetails(response.stats);
+                        $('#container-details').show();
+                    } else {
+                        $('#container-details').html(`<div class="alert alert-danger">${response.error}</div>`).show();
+                    }
+                },
+                error: function(xhr) {
+                    $('#detail-loading').hide();
+                    $('#container-details').html(`<div class="alert alert-danger">获取容器详情失败: ${xhr.responseJSON?.error || '服务器错误'}</div>`).show();
+                }
+            });
+        }
+        
+        // 渲染容器详情
+        function renderContainerDetails(stats) {
+            $('#detail-container-name').text(stats.name);
+            
+            // 基本信息
+            let baseInfo = `
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h5>基本信息</h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <td width="120"><strong>容器ID</strong></td>
+                            <td>${stats.id}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>容器名称</strong></td>
+                            <td>${stats.name}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>状态</strong></td>
+                            <td>${stats.status}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>健康状态</strong></td>
+                            <td>${stats.health}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>镜像</strong></td>
+                            <td>${stats.base_info.image}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>创建时间</strong></td>
+                            <td>${new Date(stats.created).toLocaleString()}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div class="col-md-6">
+                    <h5>资源使用</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">${stats.cpu.percent.toFixed(1)}%</h3>
+                                    <p class="text-muted mb-0">CPU使用率</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">${stats.memory.percent.toFixed(1)}%</h3>
+                                    <p class="text-muted mb-0">内存使用率</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">${stats.pids}</h3>
+                                    <p class="text-muted mb-0">进程数</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">${stats.cpu.online_cpus}</h3>
+                                    <p class="text-muted mb-0">CPU核心数</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            // 资源监控图表
+            let chartSection = `
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h5>CPU使用率</h5>
+                    <div class="metric-chart">
+                        <canvas id="cpu-chart"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h5>内存使用率</h5>
+                    <div class="metric-chart">
+                        <canvas id="memory-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            // 网络统计
+            let networkSection = `<div class="row mb-4"><div class="col-12"><h5>网络统计</h5>`;
+            
+            if (Object.keys(stats.network).length > 0) {
+                networkSection += `<table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>接口</th>
+                            <th>接收数据</th>
+                            <th>发送数据</th>
+                            <th>接收包数</th>
+                            <th>发送包数</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                for (const [interface, data] of Object.entries(stats.network)) {
+                    networkSection += `
+                    <tr>
+                        <td>${interface}</td>
+                        <td>${formatBytes(data.rx_bytes)}</td>
+                        <td>${formatBytes(data.tx_bytes)}</td>
+                        <td>${data.rx_packets}</td>
+                        <td>${data.tx_packets}</td>
+                    </tr>
+                    `;
+                }
+                
+                networkSection += `</tbody></table>`;
+            } else {
+                networkSection += `<div class="alert alert-info">没有网络接口数据</div>`;
+            }
+            
+            networkSection += `</div></div>`;
+            
+            // 进程列表
+            let processesSection = `<div class="row mb-4"><div class="col-12"><h5>进程列表</h5>`;
+            
+            if (stats.processes && stats.processes.titles && stats.processes.processes && stats.processes.processes.length > 0) {
+                processesSection += `
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            ${stats.processes.titles.map(title => `<th>${title}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${stats.processes.processes.map(process => `
+                            <tr>
+                                ${process.map(cell => `<td>${cell}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                `;
+            } else {
+                processesSection += `<div class="alert alert-info">没有进程数据</div>`;
+            }
+            
+            processesSection += `</div></div>`;
+            
+            // 组合所有部分
+            $('#container-details').html(baseInfo + chartSection + networkSection + processesSection);
+            
+            // 初始化图表
+            initCharts(stats);
+        }
+        
+        // 初始化图表
+        function initCharts(stats) {
+            // 销毁旧图表
+            if (containerCharts.cpu) containerCharts.cpu.destroy();
+            if (containerCharts.memory) containerCharts.memory.destroy();
+            
+            // 模拟历史数据点（实际应用中可能需要从服务器获取历史数据）
+            const labels = [];
+            const cpuData = [];
+            const memoryData = [];
+            
+            // 创建模拟的10个数据点
+            const now = new Date();
+            for (let i = 9; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * 30000); // 每30秒一个点
+                labels.push(time.toLocaleTimeString());
+                
+                if (i === 0) {
+                    // 最后一个点使用实际数据
+                    cpuData.push(stats.cpu.percent);
+                    memoryData.push(stats.memory.percent);
+                } else {
+                    // 其他点使用随机值作为模拟
+                    const randomCpu = Math.max(0, stats.cpu.percent + (Math.random() - 0.5) * 15);
+                    const randomMemory = Math.max(0, stats.memory.percent + (Math.random() - 0.5) * 10);
+                    cpuData.push(randomCpu);
+                    memoryData.push(randomMemory);
+                }
+            }
+            
+            // 创建CPU图表
+            const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
+            containerCharts.cpu = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'CPU使用率 (%)',
+                        data: cpuData,
+                        borderColor: '#6e8efb',
+                        backgroundColor: 'rgba(110, 142, 251, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+            
+            // 创建内存图表
+            const memoryCtx = document.getElementById('memory-chart').getContext('2d');
+            containerCharts.memory = new Chart(memoryCtx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '内存使用率 (%)',
+                        data: memoryData,
+                        borderColor: '#42e695',
+                        backgroundColor: 'rgba(66, 230, 149, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 格式化数据大小为可读格式
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            
+            return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + units[i];
+        }
+    });
+</script>
+{% endblock %} 

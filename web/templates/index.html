@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .dashboard-header {
+        margin-bottom: 20px;
+    }
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .refresh-btn {
+        margin-left: 10px;
+    }
+    .container-controls {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .container-stats {
+        font-size: 0.9rem;
+    }
+    .stats-title {
+        font-weight: 600;
+    }
+    .process-table {
+        font-size: 0.85rem;
+    }
+    .collapsible {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>容器监控仪表盘</h1>
+        <div>
+            <span id="last-update">上次更新: -</span>
+            <button id="refresh-btn" class="btn btn-sm btn-primary refresh-btn">
+                <i class="fa fa-refresh"></i> 刷新
+            </button>
+            <div class="form-check form-check-inline ms-3">
+                <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                <label class="form-check-label" for="auto-refresh">自动刷新</label>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex mt-3">
+        <div class="card me-3" style="width: 12rem;">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">总容器数</h6>
+                <h3 id="total-containers" class="card-title">-</h3>
+            </div>
+        </div>
+        <div class="card me-3" style="width: 12rem;">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">运行中</h6>
+                <h3 id="running-containers" class="card-title text-success">-</h3>
+            </div>
+        </div>
+        <div class="card me-3" style="width: 12rem;">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">已停止</h6>
+                <h3 id="stopped-containers" class="card-title text-danger">-</h3>
+            </div>
+        </div>
+        <div class="card" style="width: 12rem;">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted">不健康</h6>
+                <h3 id="unhealthy-containers" class="card-title text-warning">-</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="containers-list">
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+        <p class="mt-2">正在加载容器数据...</p>
+    </div>
+</div>
+
+<!-- 容器操作确认模态框 -->
+<div class="modal fade" id="actionConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="actionModalTitle">确认操作</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="actionModalBody">
+                您确定要执行此操作吗？
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmActionBtn">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        let autoRefreshInterval;
+        const refreshInterval = {{ config.check_interval }} * 1000; // 从配置获取刷新间隔
+        
+        // 初始加载数据
+        fetchContainersData();
+        
+        // 设置自动刷新
+        if ($('#auto-refresh').is(':checked')) {
+            startAutoRefresh();
+        }
+        
+        // 自动刷新切换
+        $('#auto-refresh').change(function() {
+            if ($(this).is(':checked')) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
+        });
+        
+        // 手动刷新按钮
+        $('#refresh-btn').click(function() {
+            fetchContainersData();
+        });
+        
+        function startAutoRefresh() {
+            autoRefreshInterval = setInterval(fetchContainersData, refreshInterval);
+        }
+        
+        function stopAutoRefresh() {
+            clearInterval(autoRefreshInterval);
+        }
+        
+        // 获取容器数据
+        function fetchContainersData() {
+            $.ajax({
+                url: '/api/containers',
+                method: 'GET',
+                success: function(data) {
+                    updateDashboard(data);
+                },
+                error: function(xhr) {
+                    console.error('获取容器数据失败', xhr);
+                    $('#containers-list').html('<div class="alert alert-danger">获取容器数据失败，请刷新页面重试</div>');
+                }
+            });
+        }
+        
+        // 更新仪表盘数据
+        function updateDashboard(data) {
+            // 更新时间
+            $('#last-update').text('上次更新: ' + new Date().toLocaleString());
+            
+            // 更新统计
+            const containers = data.containers;
+            $('#total-containers').text(containers.length);
+            
+            let runningCount = 0;
+            let stoppedCount = 0;
+            let unhealthyCount = 0;
+            
+            containers.forEach(container => {
+                if (container.status === 'running') {
+                    runningCount++;
+                }
+                if (['exited', 'dead'].includes(container.status)) {
+                    stoppedCount++;
+                }
+                if (container.health === 'unhealthy') {
+                    unhealthyCount++;
+                }
+            });
+            
+            $('#running-containers').text(runningCount);
+            $('#stopped-containers').text(stoppedCount);
+            $('#unhealthy-containers').text(unhealthyCount);
+            
+            // 更新容器列表
+            renderContainersList(containers);
+        }
+        
+        // 渲染容器列表
+        function renderContainersList(containers) {
+            if (containers.length === 0) {
+                $('#containers-list').html('<div class="alert alert-info">没有发现容器</div>');
+                return;
+            }
+            
+            let html = '';
+            
+            containers.forEach(container => {
+                // 状态样式
+                const statusClass = getStatusClass(container.status);
+                const healthClass = getHealthClass(container.health);
+                
+                // CPU和内存使用
+                let cpuUsage = '- %';
+                let memUsage = '- / - MB';
+                let memPercent = 0;
+                
+                if (container.status === 'running' && container.stats) {
+                    if (container.stats.cpu_percent !== undefined) {
+                        cpuUsage = container.stats.cpu_percent.toFixed(2) + ' %';
+                    }
+                    
+                    if (container.stats.memory_usage !== undefined) {
+                        const memoryUsageMB = (container.stats.memory_usage / (1024 * 1024)).toFixed(2);
+                        const memoryLimitMB = (container.stats.memory_limit / (1024 * 1024)).toFixed(2);
+                        memUsage = `${memoryUsageMB} / ${memoryLimitMB} MB`;
+                        memPercent = container.stats.memory_percent || 0;
+                    }
+                }
+                
+                // 重启历史
+                const restartCount = container.restart_history ? container.restart_history.restart_count : 0;
+                const lastRestart = container.restart_history && container.restart_history.last_restart 
+                    ? new Date(container.restart_history.last_restart).toLocaleString() 
+                    : '从未';
+                
+                html += `
+                <div class="card container-card" id="container-${container.id}">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0">${container.name}</h5>
+                                <small class="text-muted">ID: ${container.id}</small>
+                            </div>
+                            <div>
+                                <span class="badge badge-${statusClass}">${container.status}</span>
+                                <span class="badge badge-${healthClass}">${container.health}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="container-stats mb-3">
+                                    <div class="stats-title">CPU 使用:</div>
+                                    <div>${cpuUsage}</div>
+                                </div>
+                                <div class="container-stats">
+                                    <div class="stats-title">内存使用:</div>
+                                    <div class="progress">
+                                        <div class="progress-bar" role="progressbar" 
+                                            style="width: ${memPercent}%" 
+                                            aria-valuenow="${memPercent}" 
+                                            aria-valuemin="0" 
+                                            aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                    <div>${memUsage}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="container-stats mb-3">
+                                    <div class="stats-title">重启次数:</div>
+                                    <div>${restartCount}</div>
+                                </div>
+                                <div class="container-stats">
+                                    <div class="stats-title">最后重启:</div>
+                                    <div>${lastRestart}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="container-controls">
+                            ${container.status === 'running' ? `
+                                <span class="container-action text-warning" data-action="restart" data-container-id="${container.id}" data-container-name="${container.name}">
+                                    <i class="fa fa-refresh"></i> 重启
+                                </span>
+                                <span class="container-action text-danger" data-action="stop" data-container-id="${container.id}" data-container-name="${container.name}">
+                                    <i class="fa fa-stop"></i> 停止
+                                </span>
+                            ` : `
+                                <span class="container-action text-success" data-action="start" data-container-id="${container.id}" data-container-name="${container.name}">
+                                    <i class="fa fa-play"></i> 启动
+                                </span>
+                            `}
+                        </div>
+                    </div>
+                    
+                    ${container.processes && container.processes.titles && container.processes.processes && container.processes.processes.length > 0 ? `
+                        <div class="card-footer p-0">
+                            <div class="collapsible p-3" data-bs-toggle="collapse" data-bs-target="#processes-${container.id}">
+                                <i class="fa fa-chevron-down"></i> 查看进程 (${container.processes.processes.length})
+                            </div>
+                            <div class="collapse" id="processes-${container.id}">
+                                <div class="table-responsive">
+                                    <table class="table table-sm process-table">
+                                        <thead>
+                                            <tr>
+                                                ${container.processes.titles.map(title => `<th>${title}</th>`).join('')}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${container.processes.processes.map(process => `
+                                                <tr>
+                                                    ${process.map(cell => `<td>${cell}</td>`).join('')}
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+                `;
+            });
+            
+            $('#containers-list').html(html);
+            
+            // 绑定容器操作事件
+            $('.container-action').click(function() {
+                const action = $(this).data('action');
+                const containerId = $(this).data('container-id');
+                const containerName = $(this).data('container-name');
+                
+                // 确认操作
+                $('#actionModalTitle').text(`确认${getActionName(action)}`);
+                $('#actionModalBody').text(`您确定要${getActionName(action)}容器 "${containerName}" 吗？`);
+                
+                // 设置确认按钮事件
+                $('#confirmActionBtn').off('click').on('click', function() {
+                    performContainerAction(action, containerId);
+                });
+                
+                // 显示确认框
+                const modal = new bootstrap.Modal(document.getElementById('actionConfirmModal'));
+                modal.show();
+            });
+        }
+        
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'running':
+                    return 'running';
+                case 'exited':
+                case 'dead':
+                    return 'exited';
+                case 'starting':
+                    return 'starting';
+                default:
+                    return 'secondary';
+            }
+        }
+        
+        // 获取健康状态样式类
+        function getHealthClass(health) {
+            switch (health) {
+                case 'healthy':
+                    return 'healthy';
+                case 'unhealthy':
+                    return 'unhealthy';
+                case 'starting':
+                    return 'starting';
+                default:
+                    return 'secondary';
+            }
+        }
+        
+        // 获取操作名称
+        function getActionName(action) {
+            switch (action) {
+                case 'restart':
+                    return '重启';
+                case 'stop':
+                    return '停止';
+                case 'start':
+                    return '启动';
+                default:
+                    return '操作';
+            }
+        }
+        
+        // 执行容器操作
+        function performContainerAction(action, containerId) {
+            $.ajax({
+                url: `/api/container/${containerId}/${action}`,
+                method: 'POST',
+                success: function(response) {
+                    if (response.success) {
+                        // 关闭模态框
+                        bootstrap.Modal.getInstance(document.getElementById('actionConfirmModal')).hide();
+                        
+                        // 显示成功消息
+                        const actionName = getActionName(action);
+                        alert(`容器${actionName}成功`);
+                        
+                        // 刷新数据
+                        fetchContainersData();
+                    } else {
+                        alert(`操作失败: ${response.error || '未知错误'}`);
+                    }
+                },
+                error: function(xhr) {
+                    alert(`请求失败: ${xhr.responseJSON?.error || '服务器错误'}`);
+                }
+            });
+        }
+    });
+</script>
+{% endblock %} 

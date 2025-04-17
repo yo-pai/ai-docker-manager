@@ -1,0 +1,8 @@
+check_interval: 60
+container_list: []
+cooldown_period: 300
+monitor_specific_containers: false
+restart_stopped: false
+restart_threshold: 5
+restart_unhealthy: false
+web_port: 5001

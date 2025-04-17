@@ -1,0 +1,544 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #6e8efb, #a777e3);
+        --secondary-gradient: linear-gradient(135deg, #42e695, #3bb2b8);
+        --dark-gradient: linear-gradient(135deg, #2b5876, #4e4376);
+        --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.1), 0 6px 6px rgba(0, 0, 0, 0.1);
+        --glow-effect: 0 0 15px rgba(110, 142, 251, 0.5);
+    }
+    
+    .page-title {
+        background: var(--primary-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .ai-deploy-container {
+        margin-top: 20px;
+        box-shadow: var(--card-shadow);
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .ai-deploy-container:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-header {
+        background: var(--dark-gradient);
+        color: white;
+        border: none;
+        padding: 1.2rem;
+    }
+    
+    .card-body {
+        padding: 1.5rem;
+        background-color: #f8f9fa;
+    }
+    
+    .form-control {
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        padding: 0.75rem;
+        transition: all 0.3s ease;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .form-control:focus {
+        border-color: #a777e3;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 8px rgba(167, 119, 227, 0.6);
+    }
+    
+    textarea.form-control {
+        min-height: 120px;
+    }
+    
+    #generateBtn {
+        background: var(--primary-gradient);
+        border: none;
+        border-radius: 30px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(110, 142, 251, 0.3);
+    }
+    
+    #generateBtn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 7px 10px rgba(110, 142, 251, 0.4);
+    }
+    
+    #generateBtn:active {
+        transform: translateY(1px);
+    }
+    
+    #back-to-dashboard {
+        border-radius: 30px;
+        padding: 0.6rem 1.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .result-container {
+        margin-top: 30px;
+        background-color: #fff;
+        border-radius: 12px;
+        padding: 25px;
+        box-shadow: var(--card-shadow);
+        border-left: 5px solid #6e8efb;
+        animation: fadeInUp 0.5s ease;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    #yamlResult {
+        background: #1a1e22;
+        color: #e2e8f0;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: 'Fira Code', monospace;
+        white-space: pre-wrap;
+        max-height: 500px;
+        overflow-y: auto;
+        box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        border-left: 4px solid #a777e3;
+    }
+    
+    #deployBtn {
+        background: var(--secondary-gradient);
+        border: none;
+        border-radius: 30px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px rgba(66, 230, 149, 0.3);
+    }
+    
+    #deployBtn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 7px 10px rgba(66, 230, 149, 0.4);
+    }
+    
+    .loading-spinner {
+        display: none;
+        text-align: center;
+        margin: 25px 0;
+    }
+    
+    .loading-animation {
+        display: inline-block;
+        position: relative;
+        width: 80px;
+        height: 80px;
+    }
+    
+    .loading-animation div {
+        position: absolute;
+        top: 33px;
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        animation-timing-function: cubic-bezier(0, 1, 1, 0);
+    }
+    
+    .loading-animation div:nth-child(1) {
+        left: 8px;
+        animation: loading1 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(2) {
+        left: 8px;
+        animation: loading2 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(3) {
+        left: 32px;
+        animation: loading2 0.6s infinite;
+    }
+    
+    .loading-animation div:nth-child(4) {
+        left: 56px;
+        animation: loading3 0.6s infinite;
+    }
+    
+    @keyframes loading1 {
+        0% { transform: scale(0); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes loading2 {
+        0% { transform: translate(0, 0); }
+        100% { transform: translate(24px, 0); }
+    }
+    
+    @keyframes loading3 {
+        0% { transform: scale(1); }
+        100% { transform: scale(0); }
+    }
+    
+    .modal-content {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    }
+    
+    .modal-header {
+        background: var(--dark-gradient);
+        color: white;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        border-bottom: none;
+    }
+    
+    .progress {
+        height: 10px;
+        border-radius: 5px;
+        background-color: #e9ecef;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin: 15px 0;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        background: var(--primary-gradient);
+        border-radius: 5px;
+    }
+    
+    #result-output {
+        background: #1a1e22;
+        color: #e2e8f0;
+        border-radius: 8px;
+        font-family: 'Fira Code', monospace;
+        max-height: 300px;
+        overflow-y: auto;
+        box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+    
+    .alert-success {
+        background-color: rgba(66, 230, 149, 0.1);
+        border-color: #42e695;
+        color: #2da770;
+    }
+    
+    .alert-danger {
+        background-color: rgba(255, 99, 132, 0.1);
+        border-color: #ff6384;
+        color: #d63953;
+    }
+    
+    .tech-icon {
+        font-size: 24px;
+        margin-right: 12px;
+        color: #6e8efb;
+    }
+    
+    .tech-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        margin: 0.25rem;
+        border-radius: 20px;
+        background: rgba(110, 142, 251, 0.1);
+        color: #6e8efb;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="page-title">AI 智能容器部署</h1>
+    <div>
+        <button id="back-to-dashboard" class="btn btn-outline-secondary">
+            <i class="fa fa-dashboard"></i> 返回仪表盘
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 ai-deploy-container">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fa fa-lightbulb-o tech-icon"></i>智能化容器部署</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">
+                    使用AI智能部署容器，只需描述您的需求，系统将自动生成最优配置。
+                </p>
+                <div class="d-flex flex-wrap mb-3">
+                    <span class="tech-badge"><i class="fa fa-docker"></i> Docker</span>
+                    <span class="tech-badge"><i class="fa fa-server"></i> 容器编排</span>
+                    <span class="tech-badge"><i class="fa fa-magic"></i> AI自动化</span>
+                </div>
+                <p class="fst-italic">无需编写复杂配置，AI将为您处理一切。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card ai-deploy-container">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fa fa-terminal tech-icon"></i>输入您的容器需求</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">
+                    请详细描述您想要部署的容器，例如："我想部署一个Redis容器，版本6.0，需要持久化数据，端口映射到6379"
+                </p>
+                <form id="aiDeployForm">
+                    <div class="mb-3">
+                        <textarea class="form-control" id="containerRequirement" rows="5" placeholder="输入您需要部署的容器需求..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deploymentName" class="form-label">部署名称</label>
+                        <input type="text" class="form-control" id="deploymentName" placeholder="为您的部署起个名字（可选）">
+                        <div class="form-text">如果不填写，系统将自动生成一个名称</div>
+                    </div>
+                    <div class="text-center">
+                        <button type="submit" id="generateBtn" class="btn btn-primary">
+                            <i class="fa fa-magic"></i> 生成容器配置
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 加载中提示 -->
+                <div class="loading-spinner" id="loadingSpinner">
+                    <div class="loading-animation">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                    <p class="mt-3 fw-bold">正在使用AI生成容器配置，请稍候...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 结果显示区域 -->
+<div class="result-container" id="resultContainer" style="display: none;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3><i class="fa fa-file-code-o tech-icon"></i>生成的容器配置</h3>
+        <div>
+            <button id="deployBtn" class="btn btn-success">
+                <i class="fa fa-rocket"></i> 部署容器
+            </button>
+        </div>
+    </div>
+    <div id="yamlResult">
+        <!-- 生成的YAML将显示在此处 -->
+    </div>
+</div>
+
+<!-- 部署进度模态框 -->
+<div class="modal fade" id="deployProgressModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-cogs"></i> 正在部署容器</h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <div class="loading-animation">
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
+                    </div>
+                </div>
+                <p id="deploy-status" class="text-center fw-bold">正在准备部署...</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         id="deploy-progress" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 部署结果模态框 -->
+<div class="modal fade" id="deployResultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="result-title"><i class="fa fa-info-circle"></i> 部署结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="result-message" class="alert"></div>
+                <h6><i class="fa fa-terminal"></i> 详细输出：</h6>
+                <pre id="result-output" class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                </pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="view-dashboard-btn">查看仪表盘</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 返回仪表盘
+        $('#back-to-dashboard').click(function() {
+            window.location.href = '/';
+        });
+        
+        // 查看仪表盘
+        $('#view-dashboard-btn').click(function() {
+            window.location.href = '/';
+        });
+        
+        // 处理表单提交
+        $('#aiDeployForm').submit(function(e) {
+            e.preventDefault();
+            generateContainerConfig();
+        });
+        
+        // 部署容器
+        $('#deployBtn').click(function() {
+            deployGeneratedContainer();
+        });
+        
+        // 生成容器配置
+        function generateContainerConfig() {
+            const requirement = $('#containerRequirement').val().trim();
+            
+            if (!requirement) {
+                alert('请输入您的容器需求');
+                return;
+            }
+            
+            // 显示加载中
+            $('#loadingSpinner').show();
+            $('#generateBtn').prop('disabled', true);
+            $('#resultContainer').hide();
+            
+            // 发送请求到后端
+            $.ajax({
+                url: '/api/ai/generate',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    requirement: requirement
+                }),
+                success: function(response) {
+                    // 隐藏加载中
+                    $('#loadingSpinner').hide();
+                    $('#generateBtn').prop('disabled', false);
+                    
+                    if (response.success) {
+                        // 显示生成的YAML
+                        $('#yamlResult').text(response.yaml);
+                        $('#resultContainer').show();
+                        
+                        // 滚动到结果部分
+                        $('html, body').animate({
+                            scrollTop: $("#resultContainer").offset().top - 80
+                        }, 800);
+                    } else {
+                        alert('生成失败: ' + response.error);
+                    }
+                },
+                error: function(xhr) {
+                    // 隐藏加载中
+                    $('#loadingSpinner').hide();
+                    $('#generateBtn').prop('disabled', false);
+                    
+                    alert('请求失败: ' + (xhr.responseJSON?.error || '服务器错误'));
+                }
+            });
+        }
+        
+        // 部署生成的容器
+        function deployGeneratedContainer() {
+            const yaml = $('#yamlResult').text();
+            const deploymentName = $('#deploymentName').val().trim() || 'ai-deployment-' + new Date().getTime();
+            
+            // 显示部署进度模态框
+            const progressModal = new bootstrap.Modal(document.getElementById('deployProgressModal'));
+            progressModal.show();
+            
+            // 更新进度
+            $('#deploy-status').text('正在准备部署文件...');
+            $('#deploy-progress').css('width', '25%');
+            
+            // 发送部署请求
+            setTimeout(function() {
+                $('#deploy-status').text('正在部署容器...');
+                $('#deploy-progress').css('width', '50%');
+                
+                $.ajax({
+                    url: '/api/ai/deploy',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        yaml: yaml,
+                        deployment_name: deploymentName
+                    }),
+                    success: function(response) {
+                        // 更新进度
+                        $('#deploy-progress').css('width', '100%');
+                        $('#deploy-status').text('部署完成');
+                        
+                        // 关闭进度模态框
+                        setTimeout(function() {
+                            progressModal.hide();
+                            
+                            // 显示结果模态框
+                            const resultModal = new bootstrap.Modal(document.getElementById('deployResultModal'));
+                            
+                            if (response.success) {
+                                $('#result-message').removeClass('alert-danger').addClass('alert-success')
+                                    .html('<i class="fa fa-check-circle"></i> 容器部署成功！您可以在仪表盘查看和管理您的容器。');
+                            } else {
+                                $('#result-message').removeClass('alert-success').addClass('alert-danger')
+                                    .html('<i class="fa fa-times-circle"></i> 部署失败: ' + response.error);
+                            }
+                            
+                            $('#result-output').text(response.output || '无输出');
+                            resultModal.show();
+                        }, 500);
+                    },
+                    error: function(xhr) {
+                        // 关闭进度模态框
+                        progressModal.hide();
+                        
+                        // 显示错误
+                        const resultModal = new bootstrap.Modal(document.getElementById('deployResultModal'));
+                        $('#result-message').removeClass('alert-success').addClass('alert-danger')
+                            .html('<i class="fa fa-times-circle"></i> 请求失败: ' + (xhr.responseJSON?.error || '服务器错误'));
+                        $('#result-output').text(xhr.responseText || '无详细信息');
+                        resultModal.show();
+                    }
+                });
+            }, 1000);
+        }
+    });
+</script>
+{% endblock %} 

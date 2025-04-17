@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .preset-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .preset-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    .card-header-icon {
+        font-size: 1.5rem;
+        margin-right: 10px;
+    }
+    .deployment-card {
+        margin-bottom: 15px;
+    }
+    .version-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+    .preset-description {
+        min-height: 50px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>容器快速部署</h1>
+    <div>
+        <button class="btn btn-outline-secondary" id="refresh-deployments-btn">
+            <i class="fa fa-refresh"></i> 刷新
+        </button>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="deployTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="presets-tab" data-bs-toggle="tab" data-bs-target="#presets" type="button" role="tab" aria-selected="true">
+            <i class="fa fa-cubes"></i> 预设容器
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="deployments-tab" data-bs-toggle="tab" data-bs-target="#deployments" type="button" role="tab" aria-selected="false">
+            <i class="fa fa-server"></i> 已部署容器 <span class="badge bg-primary" id="deployments-count">0</span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="deployTabContent">
+    <!-- 预设容器选项 -->
+    <div class="tab-pane fade show active" id="presets" role="tabpanel" aria-labelledby="presets-tab">
+        <div class="row" id="presets-container">
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载预设容器...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 已部署容器 -->
+    <div class="tab-pane fade" id="deployments" role="tabpanel" aria-labelledby="deployments-tab">
+        <div id="deployments-container">
+            <div class="text-center py-5">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载已部署容器...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 容器配置模态框 -->
+<div class="modal fade" id="configureModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="configureModalTitle">配置容器</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="deployment-form">
+                    <input type="hidden" id="preset-id" name="preset_id">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="container-name" class="form-label">容器名称</label>
+                            <input type="text" class="form-control" id="container-name" name="container_name" required>
+                            <div class="form-text">容器的唯一标识，用作容器名称</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="version" class="form-label">版本</label>
+                            <select class="form-select" id="version" name="version" required>
+                                <!-- 版本选项将由JavaScript动态生成 -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="port" class="form-label">端口映射</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="port" name="port" min="1" max="65535" required>
+                                <span class="input-group-text">→</span>
+                                <input type="text" class="form-control" id="container-port" readonly>
+                            </div>
+                            <div class="form-text">将主机端口映射到容器的标准端口</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="use-volume" name="use_volume" checked>
+                                <label class="form-check-label" for="use-volume">
+                                    使用数据卷（推荐）
+                                </label>
+                                <div class="form-text">创建持久化的数据卷以保存容器数据</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <h5>特定容器配置</h5>
+                    <div id="custom-options">
+                        <!-- 由JavaScript动态生成表单项 -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="deploy-btn">部署容器</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 部署进度模态框 -->
+<div class="modal fade" id="deployProgressModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">正在部署容器</h5>
+            </div>
+            <div class="modal-body">
+                <div class="text-center mb-3">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">部署中...</span>
+                    </div>
+                </div>
+                <p id="deploy-status">正在生成配置文件...</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         id="deploy-progress" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 部署结果模态框 -->
+<div class="modal fade" id="deployResultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="result-title">部署结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="result-message" class="alert"></div>
+                <h6>详细输出：</h6>
+                <pre id="result-output" class="bg-dark text-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                </pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="view-deployment-btn">查看部署</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 加载预设容器
+        loadPresets();
+        
+        // 加载已部署容器
+        loadDeployments();
+        
+        // 刷新按钮
+        $('#refresh-deployments-btn').click(function() {
+            loadDeployments();
+        });
+        
+        // 切换到部署标签时刷新
+        $('#deployments-tab').on('shown.bs.tab', function (e) {
+            loadDeployments();
+        });
+        
+        // 部署容器
+        $('#deploy-btn').click(function() {
+            deployContainer();
+        });
+        
+        // 查看部署按钮
+        $('#view-deployment-btn').click(function() {
+            $('#deployResultModal').modal('hide');
+            $('#deployTab a[href="#deployments"]').tab('show');
+        });
+        
+        // 加载预设容器列表
+        function loadPresets() {
+            $.ajax({
+                url: '/api/deploy/presets',
+                method: 'GET',
+                success: function(data) {
+                    renderPresets(data.presets);
+                },
+                error: function() {
+                    $('#presets-container').html(
+                        '<div class="col-12"><div class="alert alert-danger">加载预设容器失败</div></div>'
+                    );
+                }
+            });
+        }
+        
+        // 渲染预设容器列表
+        function renderPresets(presets) {
+            if (!presets || Object.keys(presets).length === 0) {
+                $('#presets-container').html(
+                    '<div class="col-12"><div class="alert alert-info">没有可用的预设容器</div></div>'
+                );
+                return;
+            }
+            
+            let html = '';
+            
+            Object.keys(presets).forEach(preset_id => {
+                const preset = presets[preset_id];
+                
+                html += `
+                <div class="col-md-4 mb-4">
+                    <div class="card preset-card" data-preset="${preset_id}">
+                        <div class="card-header bg-${preset.color} text-white">
+                            <h5 class="mb-0"><i class="fa ${preset.icon} card-header-icon"></i> ${preset.name}</h5>
+                            <span class="badge bg-light text-dark version-badge">版本: ${preset.versions.length}</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text preset-description">${preset.description}</p>
+                            <div class="d-grid">
+                                <button class="btn btn-outline-${preset.color} deploy-preset-btn">
+                                    <i class="fa fa-rocket"></i> 配置并部署
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            $('#presets-container').html(html);
+            
+            // 绑定点击事件
+            $('.preset-card').click(function() {
+                const preset_id = $(this).data('preset');
+                showConfigureModal(preset_id);
+            });
+        }
+        
+        // 显示配置模态框
+        function showConfigureModal(preset_id) {
+            // 重置表单
+            $('#deployment-form')[0].reset();
+            $('#preset-id').val(preset_id);
+            
+            // 加载预设详情
+            $.ajax({
+                url: `/api/deploy/presets/${preset_id}`,
+                method: 'GET',
+                success: function(data) {
+                    const preset = data.preset;
+                    
+                    // 设置模态框标题
+                    $('#configureModalTitle').html(`配置 ${preset.name} 容器`);
+                    
+                    // 设置默认容器名称
+                    $('#container-name').val(preset_id + '_' + Math.floor(Math.random() * 1000));
+                    
+                    // 填充版本选项
+                    let versionHtml = '';
+                    preset.versions.forEach(version => {
+                        versionHtml += `<option value="${version}">${version}</option>`;
+                    });
+                    $('#version').html(versionHtml);
+                    
+                    // 设置默认端口
+                    $('#port').val(preset.default_port);
+                    $('#container-port').val(preset.default_port);
+                    
+                    // 动态生成特定容器配置表单
+                    let optionsHtml = '';
+                    if (preset.options) {
+                        Object.keys(preset.options).forEach(option_key => {
+                            const option = preset.options[option_key];
+                            
+                            optionsHtml += `<div class="mb-3">`;
+                            
+                            // 根据选项类型生成不同表单元素
+                            if (option.type === 'text' || option.type === 'password') {
+                                optionsHtml += `
+                                    <label for="${option_key}" class="form-label">${option.label}</label>
+                                    <input type="${option.type}" class="form-control" id="${option_key}" 
+                                           name="${option_key}" value="${option.default || ''}"
+                                           ${option.required ? 'required' : ''}>
+                                `;
+                            } else if (option.type === 'checkbox') {
+                                optionsHtml += `
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               id="${option_key}" name="${option_key}"
+                                               ${option.default ? 'checked' : ''}>
+                                        <label class="form-check-label" for="${option_key}">
+                                            ${option.label}
+                                        </label>
+                                    </div>
+                                `;
+                            } else if (option.type === 'select') {
+                                optionsHtml += `
+                                    <label for="${option_key}" class="form-label">${option.label}</label>
+                                    <select class="form-select" id="${option_key}" name="${option_key}">
+                                `;
+                                
+                                option.options.forEach(opt => {
+                                    optionsHtml += `<option value="${opt}" ${opt === option.default ? 'selected' : ''}>${opt}</option>`;
+                                });
+                                
+                                optionsHtml += `</select>`;
+                            } else if (option.type === 'number') {
+                                optionsHtml += `
+                                    <label for="${option_key}" class="form-label">${option.label}</label>
+                                    <input type="number" class="form-control" id="${option_key}" 
+                                           name="${option_key}" value="${option.default || 0}"
+                                           min="${option.min || 0}" max="${option.max || 100}">
+                                `;
+                            }
+                            
+                            optionsHtml += `</div>`;
+                        });
+                    }
+                    
+                    $('#custom-options').html(optionsHtml);
+                    
+                    // 显示模态框
+                    const modal = new bootstrap.Modal(document.getElementById('configureModal'));
+                    modal.show();
+                },
+                error: function() {
+                    alert('加载预设容器详情失败');
+                }
+            });
+        }
+        
+        // 部署容器
+        function deployContainer() {
+            // 收集表单数据
+            const formData = {};
+            const form = $('#deployment-form').serializeArray();
+            
+            form.forEach(item => {
+                formData[item.name] = item.value;
+            });
+            
+            // 处理复选框
+            $('#deployment-form input[type="checkbox"]').each(function() {
+                formData[this.name] = this.checked;
+            });
+            
+            // 验证必填字段
+            let isValid = true;
+            
+            if (!formData.container_name) {
+                alert('请输入容器名称');
+                isValid = false;
+            }
+            
+            if (!formData.port) {
+                alert('请输入端口号');
+                isValid = false;
+            }
+            
+            if (!isValid) {
+                return;
+            }
+            
+            // 显示进度模态框
+            const deployProgressModal = new bootstrap.Modal(document.getElementById('deployProgressModal'));
+            deployProgressModal.show();
+            $('#deploy-progress').css('width', '10%');
+            
+            // 第一步：生成Compose文件
+            $.ajax({
+                url: '/api/deploy/generate',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function(response) {
+                    if (response.success) {
+                        $('#deploy-status').text('配置文件生成成功，正在部署容器...');
+                        $('#deploy-progress').css('width', '50%');
+                        
+                        // 第二步：部署容器
+                        deployContainerWithCompose(response.compose_file);
+                    } else {
+                        showDeployResult(false, '生成配置文件失败', response.error || '未知错误');
+                        deployProgressModal.hide();
+                    }
+                },
+                error: function(xhr) {
+                    showDeployResult(false, '请求失败', xhr.responseText || '服务器错误');
+                    deployProgressModal.hide();
+                }
+            });
+        }
+        
+        // 使用compose文件部署容器
+        function deployContainerWithCompose(compose_file) {
+            $.ajax({
+                url: '/api/deploy/start',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({compose_file: compose_file}),
+                success: function(response) {
+                    $('#deploy-progress').css('width', '100%');
+                    
+                    // 隐藏进度模态框
+                    bootstrap.Modal.getInstance(document.getElementById('deployProgressModal')).hide();
+                    
+                    // 显示部署结果
+                    showDeployResult(
+                        response.success,
+                        response.success ? '容器部署成功' : '容器部署失败: ' + (response.error || ''),
+                        response.output || ''
+                    );
+                    
+                    // 如果部署成功，关闭配置模态框
+                    if (response.success) {
+                        bootstrap.Modal.getInstance(document.getElementById('configureModal')).hide();
+                        // 刷新部署列表
+                        loadDeployments();
+                    }
+                },
+                error: function(xhr) {
+                    console.error('部署请求失败:', xhr);
+                    bootstrap.Modal.getInstance(document.getElementById('deployProgressModal')).hide();
+                    
+                    let errorMessage = '部署请求失败';
+                    try {
+                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                            errorMessage += ': ' + xhr.responseJSON.error;
+                        } else if (xhr.responseText) {
+                            errorMessage += ': ' + xhr.responseText;
+                        }
+                    } catch (e) {
+                        console.error('解析错误信息失败', e);
+                    }
+                    
+                    showDeployResult(false, errorMessage, xhr.responseText || '服务器错误');
+                }
+            });
+        }
+        
+        // 显示部署结果
+        function showDeployResult(success, message, output) {
+            $('#result-title').text(success ? '部署成功' : '部署失败');
+            $('#result-message').removeClass('alert-success alert-danger')
+                               .addClass(success ? 'alert-success' : 'alert-danger')
+                               .text(message);
+            $('#result-output').text(output);
+            
+            const resultModal = new bootstrap.Modal(document.getElementById('deployResultModal'));
+            resultModal.show();
+        }
+        
+        // 加载已部署容器
+        function loadDeployments() {
+            $.ajax({
+                url: '/api/deploy/deployments',
+                method: 'GET',
+                success: function(data) {
+                    renderDeployments(data.deployments);
+                },
+                error: function() {
+                    $('#deployments-container').html(
+                        '<div class="alert alert-danger">加载已部署容器失败</div>'
+                    );
+                }
+            });
+        }
+        
+        // 渲染已部署容器
+        function renderDeployments(deployments) {
+            if (!deployments || deployments.length === 0) {
+                $('#deployments-container').html(
+                    '<div class="alert alert-info">没有已部署的容器</div>'
+                );
+                $('#deployments-count').text('0');
+                return;
+            }
+            
+            $('#deployments-count').text(deployments.length);
+            
+            let html = '';
+            
+            deployments.forEach(deployment => {
+                const statusClass = getStatusClass(deployment.status);
+                const image = deployment.image.split(':');
+                const imageName = image[0];
+                const version = image.length > 1 ? image[1] : 'latest';
+                
+                let portMappings = '';
+                deployment.ports.forEach(port => {
+                    const ports = port.split(':');
+                    const hostPort = ports[0];
+                    const containerPort = ports.length > 1 ? ports[1] : hostPort;
+                    portMappings += `
+                        <div class="mb-1">
+                            <span class="badge bg-light text-dark">${hostPort}</span> → 
+                            <span class="badge bg-light text-dark">${containerPort}</span>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                <div class="card deployment-card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">${deployment.name}</h5>
+                            <span class="badge badge-${statusClass}">${deployment.status}</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p><strong>镜像：</strong> ${imageName}</p>
+                                <p><strong>版本：</strong> ${version}</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p><strong>端口映射：</strong></p>
+                                ${portMappings || '<p class="text-muted">无端口映射</p>'}
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex justify-content-end">
+                                    <button class="btn btn-sm btn-primary me-2 manage-deployment-btn" 
+                                            data-deployment="${deployment.name}" data-action="view">
+                                        <i class="fa fa-eye"></i> 查看
+                                    </button>
+                                    <button class="btn btn-sm btn-danger remove-deployment-btn" 
+                                            data-deployment="${deployment.name}">
+                                        <i class="fa fa-trash"></i> 移除
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            $('#deployments-container').html(html);
+            
+            // 绑定移除部署按钮事件
+            $('.remove-deployment-btn').click(function() {
+                const deploymentName = $(this).data('deployment');
+                if (confirm(`确定要移除部署 "${deploymentName}" 吗？这将停止并删除相关容器和数据卷。`)) {
+                    removeDeployment(deploymentName);
+                }
+            });
+        }
+        
+        // 移除部署
+        function removeDeployment(deploymentName) {
+            $.ajax({
+                url: '/api/deploy/remove',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({deployment_name: deploymentName}),
+                success: function(response) {
+                    if (response.success) {
+                        alert(`部署 "${deploymentName}" 已成功移除`);
+                        loadDeployments();
+                    } else {
+                        alert(`移除部署失败: ${response.error || '未知错误'}`);
+                    }
+                },
+                error: function(xhr) {
+                    alert(`请求失败: ${xhr.responseJSON?.error || '服务器错误'}`);
+                }
+            });
+        }
+        
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'running':
+                    return 'running';
+                case 'exited':
+                case 'dead':
+                    return 'exited';
+                case 'starting':
+                    return 'starting';
+                case 'not_found':
+                    return 'secondary';
+                default:
+                    return 'secondary';
+            }
+        }
+    });
+</script>
+{% endblock %} 

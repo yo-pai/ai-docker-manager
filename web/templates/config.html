@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .config-section {
+        margin-bottom: 20px;
+    }
+    .form-label {
+        font-weight: 500;
+    }
+    .form-text {
+        font-size: 0.85rem;
+    }
+    .container-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .config-card {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>系统配置</h1>
+    <div>
+        <button id="save-config-btn" class="btn btn-primary">
+            <i class="fa fa-save"></i> 保存配置
+        </button>
+        <button id="reset-config-btn" class="btn btn-outline-secondary ms-2">
+            <i class="fa fa-refresh"></i> 重置
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card config-card">
+            <div class="card-header">
+                <h5 class="mb-0">监控设置</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="check_interval" class="form-label">检查间隔（秒）</label>
+                    <input type="number" class="form-control" id="check_interval" name="check_interval" min="5" value="{{ config.check_interval }}">
+                    <div class="form-text">容器状态检查的时间间隔，建议不少于5秒</div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="restart_stopped" name="restart_stopped" {% if config.restart_stopped %}checked{% endif %}>
+                    <label class="form-check-label" for="restart_stopped">自动重启已停止的容器</label>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="restart_unhealthy" name="restart_unhealthy" {% if config.restart_unhealthy %}checked{% endif %}>
+                    <label class="form-check-label" for="restart_unhealthy">自动重启不健康的容器</label>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="restart_threshold" class="form-label">重启阈值</label>
+                    <input type="number" class="form-control" id="restart_threshold" name="restart_threshold" min="1" value="{{ config.restart_threshold }}">
+                    <div class="form-text">冷却期内允许的最大重启次数</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="cooldown_period" class="form-label">冷却期（秒）</label>
+                    <input type="number" class="form-control" id="cooldown_period" name="cooldown_period" min="60" value="{{ config.cooldown_period }}">
+                    <div class="form-text">达到重启阈值后的冷却时间</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card config-card">
+            <div class="card-header">
+                <h5 class="mb-0">容器筛选</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="monitor_specific_containers" name="monitor_specific_containers" {% if config.monitor_specific_containers %}checked{% endif %}>
+                    <label class="form-check-label" for="monitor_specific_containers">只监控特定容器</label>
+                </div>
+                
+                <div class="mb-3" id="container-list-section" {% if not config.monitor_specific_containers %}style="display:none"{% endif %}>
+                    <label class="form-label">选择要监控的容器</label>
+                    <div class="container-list border rounded p-2" id="container-checkboxes">
+                        <div class="text-center py-2">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div> 加载容器列表...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card config-card">
+            <div class="card-header">
+                <h5 class="mb-0">Web界面设置</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="web_port" class="form-label">Web端口</label>
+                    <input type="number" class="form-control" id="web_port" name="web_port" min="1" max="65535" value="{{ config.web_port }}">
+                    <div class="form-text">Web界面监听的端口（更改后需要重启服务）</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 保存确认弹窗 -->
+<div class="modal fade" id="saveSuccessModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">保存成功</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                配置已成功保存，部分设置可能需要重启服务才能生效。
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 原始配置备份
+        let originalConfig = {};
+        
+        // 加载容器列表
+        loadContainerList();
+        
+        // 获取当前配置
+        $.ajax({
+            url: '/api/config',
+            method: 'GET',
+            success: function(config) {
+                originalConfig = Object.assign({}, config);
+            }
+        });
+        
+        // 只监控特定容器选项切换
+        $('#monitor_specific_containers').change(function() {
+            if ($(this).is(':checked')) {
+                $('#container-list-section').slideDown();
+            } else {
+                $('#container-list-section').slideUp();
+            }
+        });
+        
+        // 保存配置
+        $('#save-config-btn').click(function() {
+            const newConfig = {
+                check_interval: parseInt($('#check_interval').val()),
+                restart_stopped: $('#restart_stopped').is(':checked'),
+                restart_unhealthy: $('#restart_unhealthy').is(':checked'),
+                restart_threshold: parseInt($('#restart_threshold').val()),
+                cooldown_period: parseInt($('#cooldown_period').val()),
+                monitor_specific_containers: $('#monitor_specific_containers').is(':checked'),
+                web_port: parseInt($('#web_port').val())
+            };
+            
+            // 如果启用了特定容器监控，收集选中的容器
+            if (newConfig.monitor_specific_containers) {
+                newConfig.container_list = [];
+                $('input[name="container_checkbox"]:checked').each(function() {
+                    newConfig.container_list.push($(this).val());
+                });
+            }
+            
+            // 发送配置到服务器
+            $.ajax({
+                url: '/api/config',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(newConfig),
+                success: function(response) {
+                    if (response.success) {
+                        // 更新原始配置备份
+                        originalConfig = Object.assign({}, newConfig);
+                        
+                        // 显示成功模态框
+                        const modal = new bootstrap.Modal(document.getElementById('saveSuccessModal'));
+                        modal.show();
+                    } else {
+                        alert('保存配置失败: ' + (response.error || '未知错误'));
+                    }
+                },
+                error: function(xhr) {
+                    alert('请求失败: ' + (xhr.responseJSON?.error || '服务器错误'));
+                }
+            });
+        });
+        
+        // 重置配置
+        $('#reset-config-btn').click(function() {
+            if (confirm('确定要重置所有更改吗？')) {
+                // 重新加载页面以重置表单
+                location.reload();
+            }
+        });
+        
+        // 加载容器列表
+        function loadContainerList() {
+            $.ajax({
+                url: '/api/containers',
+                method: 'GET',
+                success: function(data) {
+                    renderContainerList(data.containers);
+                },
+                error: function() {
+                    $('#container-checkboxes').html('<div class="alert alert-danger">加载容器列表失败</div>');
+                }
+            });
+        }
+        
+        // 渲染容器列表
+        function renderContainerList(containers) {
+            if (containers.length === 0) {
+                $('#container-checkboxes').html('<div class="alert alert-info">没有发现容器</div>');
+                return;
+            }
+            
+            let html = '';
+            
+            containers.forEach(container => {
+                const checked = {{ config.container_list|tojson }}.includes(container.name) ? 'checked' : '';
+                html += `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="container_checkbox" 
+                           id="container-${container.id}" value="${container.name}" ${checked}>
+                    <label class="form-check-label" for="container-${container.id}">
+                        ${container.name} <span class="badge bg-${getStatusClass(container.status)}">${container.status}</span>
+                    </label>
+                </div>
+                `;
+            });
+            
+            $('#container-checkboxes').html(html);
+        }
+        
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'running':
+                    return 'success';
+                case 'exited':
+                case 'dead':
+                    return 'danger';
+                case 'starting':
+                    return 'warning';
+                default:
+                    return 'secondary';
+            }
+        }
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .logs-container {
+        background-color: #212529;
+        color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        height: 700px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+    
+    .log-entry {
+        margin-bottom: 3px;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    
+    .log-info {
+        color: #0dcaf0;
+    }
+    
+    .log-warning {
+        color: #ffc107;
+    }
+    
+    .log-error {
+        color: #dc3545;
+    }
+    
+    .log-timestamp {
+        color: #adb5bd;
+    }
+    
+    .log-controls {
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>系统日志</h1>
+    <div class="log-controls">
+        <button id="refresh-logs-btn" class="btn btn-primary">
+            <i class="fa fa-refresh"></i> 刷新日志
+        </button>
+        <button id="clear-logs-btn" class="btn btn-outline-secondary ms-2">
+            <i class="fa fa-trash"></i> 清空显示
+        </button>
+        <div class="form-check form-check-inline ms-3">
+            <input class="form-check-input" type="checkbox" id="auto-scroll" checked>
+            <label class="form-check-label" for="auto-scroll">自动滚动</label>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="logs-container" id="logs-container">
+            <div class="text-center py-5">
+                <div class="spinner-border text-light" role="status">
+                    <span class="visually-hidden">加载中...</span>
+                </div>
+                <p class="mt-2">正在加载日志...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // 初始加载日志
+        loadLogs();
+        
+        // 刷新日志按钮
+        $('#refresh-logs-btn').click(function() {
+            loadLogs();
+        });
+        
+        // 清空日志按钮
+        $('#clear-logs-btn').click(function() {
+            $('#logs-container').empty();
+        });
+        
+        // 加载日志
+        function loadLogs() {
+            $.ajax({
+                url: '/api/logs',
+                method: 'GET',
+                success: function(data) {
+                    if (data.logs) {
+                        renderLogs(data.logs);
+                    } else {
+                        $('#logs-container').html('<div class="text-center">没有日志数据</div>');
+                    }
+                },
+                error: function() {
+                    $('#logs-container').html('<div class="text-center text-danger">加载日志失败</div>');
+                }
+            });
+        }
+        
+        // 渲染日志
+        function renderLogs(logs) {
+            let html = '';
+            
+            logs.forEach(logLine => {
+                // 解析日志级别
+                let logClass = 'log-entry';
+                
+                if (logLine.includes('ERROR')) {
+                    logClass += ' log-error';
+                } else if (logLine.includes('WARNING')) {
+                    logClass += ' log-warning';
+                } else if (logLine.includes('INFO')) {
+                    logClass += ' log-info';
+                }
+                
+                // 格式化时间戳
+                const timeMatch = logLine.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})/);
+                if (timeMatch) {
+                    const timestamp = timeMatch[1];
+                    const content = logLine.substring(timestamp.length);
+                    html += `<div class="${logClass}"><span class="log-timestamp">${timestamp}</span>${content}</div>`;
+                } else {
+                    html += `<div class="${logClass}">${logLine}</div>`;
+                }
+            });
+            
+            $('#logs-container').html(html);
+            
+            // 自动滚动到底部
+            if ($('#auto-scroll').is(':checked')) {
+                const logsContainer = document.getElementById('logs-container');
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
+        }
+    });
+</script>
+{% endblock %} 
